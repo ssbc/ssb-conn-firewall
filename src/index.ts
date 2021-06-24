@@ -22,7 +22,7 @@ const pullPromise = require('pull-promise');
 const cat = require('pull-cat');
 const debug = require('debug')('ssb:conn-firewall');
 
-const ATTEMPTS_FILENAME = 'conn-unknown-attempts.json';
+const ATTEMPTS_FILENAME = 'conn-attempts.json';
 const MAX_ATTEMPTS = 20;
 
 @plugin('0.1.0')
@@ -156,7 +156,9 @@ class ConnFirewall {
         if (hops && (hops[dest] == null || hops[dest] < -1)) {
           debug('prevented unknown peer %s from connecting to us', dest);
           cb(new Error('client is a stranger'));
-          notifyAttempts({id: dest, ts: Date.now()} as Attempt);
+          const ts = Date.now();
+          firewall.attemptsMap?.set(dest, ts);
+          notifyAttempts({id: dest, ts} as Attempt);
           firewall.saveOldAttempts();
           return;
         }
@@ -193,8 +195,8 @@ class ConnFirewall {
 
   @muxrpc('source')
   public attempts = (opts?: AttemptsOpts) => {
-    const live = opts?.live ?? true;
     const old = opts?.old ?? false;
+    const live = opts?.live ?? true;
 
     if (!old && !live) return pull.empty();
     if (old && !live) return this.oldAttempts();
