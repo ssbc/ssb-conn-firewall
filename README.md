@@ -41,7 +41,7 @@ Some parameters can be configured by the user or by application code through the
   conn: {
     firewall: {
       /**
-       * Whether the firewall should forbid disconnections from peers that are
+       * Whether the firewall should forbid connections from peers that are
        * explicitly blocked by us (according to ssb-friends).
        *
        * Default is `true`.
@@ -49,7 +49,7 @@ Some parameters can be configured by the user or by application code through the
       rejectBlocked: boolean,
 
       /**
-       * Whether the firewall should forbid disconnections from peers that are
+       * Whether the firewall should forbid connections from peers that are
        * unknown to us, i.e. not within our configured hops range (according to
        * ssb-friends).
        *
