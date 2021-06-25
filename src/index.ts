@@ -107,21 +107,19 @@ class ConnFirewall {
     const firewall = this;
     const {ssb, config, notifyAttempts} = firewall;
 
-    // Whenever the social graph changes, immediately disconnect from
-    // unauthorized peers that had an active connection
+    // Whenever the social graph changes:
     pull(
       ssb.friends.graphStream({live: true, old: false}),
       pull.drain((graph: GraphEvent) => {
         for (const source of Object.keys(graph)) {
           for (const dest of Object.keys(graph[source])) {
             const value = graph[source][dest];
+            // Immediately disconnect from unauthorized peers who were connected
             if (
-              // if we are blocking a connected peer
               (config.conn.firewall.rejectBlocked &&
                 source === ssb.id &&
                 value === -1 &&
                 ssb.peers[dest]) ||
-              // if a connected peer is now unknown
               (config.conn.firewall.rejectUnknown &&
                 source === ssb.id &&
                 value < -1 &&
@@ -129,6 +127,12 @@ class ConnFirewall {
             ) {
               ssb.peers[dest].forEach((rpc) => rpc.close(true));
               ssb.peers[dest] = [];
+            }
+
+            // If we are following a new peer, delete their attempt logs
+            if (source === ssb.id && value >= 0) {
+              this.attemptsMap?.delete(dest);
+              this.saveOldAttempts();
             }
           }
         }
