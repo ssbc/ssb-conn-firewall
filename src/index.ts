@@ -188,7 +188,7 @@ class ConnFirewall {
   private oldAttempts() {
     return pull(
       pullPromise.source(this.attemptsMapLoaded),
-      pull.map(ConnFirewall.prepareAttemptsData),
+      pull.map(() => ConnFirewall.prepareAttemptsData(this.attemptsMap!)),
       pull.flatten(),
     );
   }
