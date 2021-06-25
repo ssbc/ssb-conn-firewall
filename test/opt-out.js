@@ -4,6 +4,7 @@ const SecretStack = require('secret-stack');
 const run = require('promisify-tuple');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 const pull = require('pull-stream');
 const rimraf = require('rimraf');
 const ssbKeys = require('ssb-keys');
@@ -96,14 +97,71 @@ tape('carol is unknown to alice, carol cannot connect to alice', async (t) => {
   );
 
   const [err2] = await run(carol.connect)(alice.getAddress());
-  t.match(err2.message, /server hung up/, 'bob cannot connect');
+  t.match(err2.message, /server hung up/, 'carol cannot connect');
 });
 
-tape('teardown', async (t) => {
+tape('attempts old=true', (t) => {
+  t.plan(7);
+
+  pull(
+    alice.connFirewall.attempts({old: true, live: true}),
+    pull.drain((attempt) => {
+      t.equals(attempt.id, carol.id, 'logged that carol attempted');
+      t.true(typeof attempt.ts, "carol's attempt is timestamped");
+      t.true(attempt.ts < Date.now(), 'happened in the past');
+      t.true(Date.now() - 1000 < attempt.ts, 'happened less than 1s ago');
+
+      setTimeout(() => {
+        const p = path.join(os.tmpdir(), 'server-alice', 'conn-attempts.json');
+        t.true(fs.existsSync(p), 'conn-attempts.json exists');
+        const contents = fs.readFileSync(p, 'utf-8');
+        const entries = JSON.parse(contents);
+        t.equals(entries.length, 1);
+        t.deepEqual(entries[0], [attempt.id, attempt.ts]);
+      }, 500);
+    }),
+  );
+});
+
+tape('temporary teardown', async (t) => {
   await Promise.all([
     run(alice.close)(true),
     run(bob.close)(true),
     run(carol.close)(true),
   ]);
+  t.end();
+});
+
+tape('alice can read old attempts when booting up again', (t) => {
+  t.plan(3);
+
+  alice = createSsbServer({
+    path: path.join(os.tmpdir(), 'server-alice'),
+    timeout: CONNECTION_TIMEOUT,
+    keys: ssbKeys.generate(),
+    friends: {
+      hops: 2,
+      hookAuth: false,
+    },
+    conn: {
+      firewall: {
+        rejectBlocked: false,
+        rejectUnknown: true,
+      },
+    },
+  });
+
+  pull(
+    alice.connFirewall.attempts({old: true, live: false}),
+    pull.drain((attempt) => {
+      t.equals(attempt.id, carol.id, 'logged that carol attempted');
+      t.true(typeof attempt.ts, "carol's attempt is timestamped");
+      t.true(attempt.ts < Date.now(), 'happened in the past');
+    }),
+  );
+});
+
+tape('teardown', async (t) => {
+  await run(alice.close)(true);
   t.end();
 });
