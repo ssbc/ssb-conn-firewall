@@ -129,8 +129,12 @@ class ConnFirewall {
               ssb.peers[dest] = [];
             }
 
-            // If we are following a new peer, delete their attempt logs
-            if (source === ssb.id && value >= 0) {
+            // If we are following or blocking a peer, delete their attempt logs
+            if (
+              config.conn.firewall.rejectUnknown &&
+              source === ssb.id &&
+              (value >= 0 || value === -1)
+            ) {
               this.attemptsMap?.delete(dest);
               this.saveOldAttempts();
             }
