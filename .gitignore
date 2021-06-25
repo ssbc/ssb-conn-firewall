@@ -1,5 +1,7 @@
 node_modules
 .vscode
+.nyc_output
+coverage
 shrinkwrap.yaml
 pnpm-lock.yaml
 lib

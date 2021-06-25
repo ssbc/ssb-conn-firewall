@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@types/node": "12.x",
+    "nyc": "^15.1.0",
     "rimraf": "^3.0.2",
     "secret-stack": "^6.4.0",
     "ssb-caps": "^1.1.0",
@@ -37,6 +38,7 @@
   "scripts": {
     "typescript": "tsc",
     "tape": "tape test/*.js | tap-bail | tap-spec",
-    "test": "npm run typescript && npm run tape"
+    "test": "npm run typescript && npm run tape",
+    "coverage": "nyc --reporter=lcov npm test"
   }
 }

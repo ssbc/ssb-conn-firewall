@@ -1,5 +1,7 @@
 /node_modules
 /src
+/.nyc_output
+/coverage
 /test
 /tsconfig.json
 /pnpm-lock.yaml
