@@ -19,7 +19,7 @@
     "pull-promise": "^2.0.0",
     "pull-stream": "^3.6.14",
     "secret-stack-decorators": "^1.1.0",
-    "ssb-friends": "ssbc/ssb-friends#unbermuda",
+    "ssb-friends": "^5.0.0",
     "ssb-typescript": "^2.5.0"
   },
   "devDependencies": {
