@@ -52,7 +52,7 @@ tape('setup', (t) => {
     },
   });
 
-  t.end()
+  t.end();
 });
 
 tape('alice blocks bob, and bob cannot connect to alice', async (t) => {
@@ -65,6 +65,19 @@ tape('alice blocks bob, and bob cannot connect to alice', async (t) => {
 
   const [err2] = await run(bob.connect)(alice.getAddress());
   t.match(err2.message, /server hung up/, 'bob cannot connect');
+
+  t.end();
+});
+
+tape('alice reconfigures to allow blocked (and thus bob)', async (t) => {
+  const [err] = await run(alice.connFirewall.reconfigure)({
+    rejectBlocked: false,
+  });
+  t.error(err, 'alice reconfigured her firewall');
+
+  const [err2, rpc] = await run(bob.connect)(alice.getAddress());
+  t.error(err2, 'no error to connect');
+  t.ok(rpc, 'rpc established');
 
   t.end();
 });

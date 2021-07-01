@@ -14,9 +14,11 @@ export interface SSBConfig {
   };
 }
 
-export type RequiredDeep<T> = {
+type RequiredDeep<T> = {
   [P in keyof T]-?: RequiredDeep<T[P]>;
 };
+
+export type FirewallConfig = RequiredDeep<SSBConfig>['conn']['firewall']
 
 export interface SSB {
   id: FeedId;

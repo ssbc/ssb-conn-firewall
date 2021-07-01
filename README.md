@@ -29,7 +29,6 @@ Add this plugin to ssb-server like this:
      // ...
 ```
 
-
 ## Usage
 
 ### Configuration
@@ -69,9 +68,12 @@ In case you have the `rejectUnknown` configuration enabled, `ssb-conn-firewall` 
 
 The `attempts([opts])` API returns a pull-stream of such connection attempts, where each attempt is expressed as an object `{id, ts}`, where `id` is the SSB ID of the peer who attempted to connect to us, and `ts` is a timestamp of when that attempt happened.
 
-- `opts.old` *Boolean* - whether or not to include previous attempts stored in disk. (Default: `false`)
-- `opts.live` *Boolean* - whether or not to include subsequent attempts happening during the execution of your program. (Default: `true`)
+- `opts.old` _Boolean_ - whether or not to include previous attempts stored in disk. (Default: `false`)
+- `opts.live` _Boolean_ - whether or not to include subsequent attempts happening during the execution of your program. (Default: `true`)
 
+#### `ssb.connFirewall.reconfigure(config) => void`
+
+At any point during the execution of your program, you can reconfigure the firewall rules using this API. The configuration object passed to this API has the same shape as `config.conn.firewall` (see above) has. Any subsequent attempts to connect will abide by the new rules.
 
 ## License
 

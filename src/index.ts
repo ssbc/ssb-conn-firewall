@@ -3,8 +3,8 @@ import {plugin, muxrpc} from 'secret-stack-decorators';
 import {
   Attempt,
   AttemptsOpts,
+  FirewallConfig,
   GraphEvent,
-  RequiredDeep,
   SSB,
   SSBConfig,
   SSBWithFriends,
@@ -28,7 +28,7 @@ const MAX_ATTEMPTS = 20;
 @plugin('0.1.0')
 class ConnFirewall {
   private readonly ssb: SSBWithFriends;
-  private readonly config: RequiredDeep<SSBConfig>;
+  private readonly config: FirewallConfig;
   private attemptsMap: Map<FeedId, number> | null;
   private attemptsMapLoaded: Promise<
     NonNullable<typeof ConnFirewall.prototype.attemptsMap>
@@ -49,13 +49,13 @@ class ConnFirewall {
     this.init();
   }
 
-  static applyDefaults(cfg: SSBConfig): RequiredDeep<SSBConfig> {
+  static applyDefaults(cfg: SSBConfig): FirewallConfig {
     const output = {...cfg};
     output.conn ??= {};
     output.conn.firewall ??= {};
     output.conn.firewall.rejectBlocked ??= true;
     output.conn.firewall.rejectUnknown ??= false;
-    return output as RequiredDeep<SSBConfig>;
+    return output.conn!.firewall! as FirewallConfig;
   }
 
   static pruneAttemptsEntries(
@@ -116,11 +116,11 @@ class ConnFirewall {
             const value = graph[source][dest];
             // Immediately disconnect from unauthorized peers who were connected
             if (
-              (config.conn.firewall.rejectBlocked &&
+              (config.rejectBlocked &&
                 source === ssb.id &&
                 value === -1 &&
                 ssb.peers[dest]) ||
-              (config.conn.firewall.rejectUnknown &&
+              (config.rejectUnknown &&
                 source === ssb.id &&
                 value < -1 &&
                 ssb.peers[dest])
@@ -131,7 +131,7 @@ class ConnFirewall {
 
             // If we are following or blocking a peer, delete their attempt logs
             if (
-              config.conn.firewall.rejectUnknown &&
+              config.rejectUnknown &&
               source === ssb.id &&
               (value >= 0 || value === -1)
             ) {
@@ -148,7 +148,7 @@ class ConnFirewall {
       const source = ssb.id;
       const [dest, cb] = args;
 
-      if (config.conn.firewall.rejectBlocked) {
+      if (config.rejectBlocked) {
         // Blocked peers also cannot connect to us
         const [, blocked] = await run(ssb.friends.isBlocking)({source, dest});
         if (blocked) {
@@ -158,7 +158,7 @@ class ConnFirewall {
         }
       }
 
-      if (config.conn.firewall.rejectUnknown) {
+      if (config.rejectUnknown) {
         // Peers beyond our hops range cannot connect, but we'll log the attempt
         const [, hops] = await run(ssb.friends.hops)({});
         if (hops && (hops[dest] == null || hops[dest] < -1)) {
@@ -182,8 +182,8 @@ class ConnFirewall {
   private debugInit() {
     if (!debug.enabled) return;
     const names = [];
-    if (this.config.conn.firewall.rejectBlocked) names.push('blocked peers');
-    if (this.config.conn.firewall.rejectUnknown) names.push('unknown peers');
+    if (this.config.rejectBlocked) names.push('blocked peers');
+    if (this.config.rejectUnknown) names.push('unknown peers');
     if (names.length === 0) return;
 
     debug('configured to reject ' + names.join(' and '));
@@ -210,6 +210,17 @@ class ConnFirewall {
     if (old && !live) return this.oldAttempts();
     if (!old && live) return this.liveAttempts();
     if (old && live) return cat([this.oldAttempts(), this.liveAttempts()]);
+  };
+
+  @muxrpc('sync')
+  public reconfigure = (conf?: Partial<FirewallConfig>) => {
+    if (!conf) return;
+    if (typeof conf.rejectBlocked !== 'undefined') {
+      this.config.rejectBlocked = !!conf.rejectBlocked;
+    }
+    if (typeof conf.rejectUnknown !== 'undefined') {
+      this.config.rejectUnknown = !!conf.rejectUnknown;
+    }
   };
 }
 
