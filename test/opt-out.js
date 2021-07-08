@@ -8,6 +8,7 @@ const fs = require('fs');
 const pull = require('pull-stream');
 const rimraf = require('rimraf');
 const ssbKeys = require('ssb-keys');
+const sleep = require('util').promisify(setTimeout);
 
 const createSsbServer = SecretStack({
   caps: {shs: crypto.randomBytes(32).toString('base64')},
@@ -75,6 +76,8 @@ tape('alice blocks bob, but allows bob to connect', async (t) => {
     blocking: true,
   });
   t.error(err, 'published contact msg');
+
+  await sleep(2000);
 
   const [err2, rpc] = await run(bob.connect)(alice.getAddress());
   t.error(err2, 'no error to connect');

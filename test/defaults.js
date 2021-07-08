@@ -6,6 +6,7 @@ const path = require('path');
 const os = require('os');
 const rimraf = require('rimraf');
 const ssbKeys = require('ssb-keys');
+const sleep = require('util').promisify(setTimeout);
 
 const createSsbServer = SecretStack({
   caps: {shs: crypto.randomBytes(32).toString('base64')},
@@ -63,6 +64,8 @@ tape('alice blocks bob, and bob cannot connect to alice', async (t) => {
   });
   t.error(err, 'published contact msg');
 
+  await sleep(2000);
+
   const [err2] = await run(bob.connect)(alice.getAddress());
   t.match(err2.message, /server hung up/, 'bob cannot connect');
 
@@ -74,6 +77,8 @@ tape('alice reconfigures to allow blocked (and thus bob)', async (t) => {
     rejectBlocked: false,
   });
   t.error(err, 'alice reconfigured her firewall');
+
+  await sleep(2000);
 
   const [err2, rpc] = await run(bob.connect)(alice.getAddress());
   t.error(err2, 'no error to connect');
