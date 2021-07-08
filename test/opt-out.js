@@ -87,15 +87,18 @@ tape('alice blocks bob, but allows bob to connect', async (t) => {
 });
 
 tape('carol is unknown to alice, carol cannot connect to alice', async (t) => {
-  t.plan(5);
+  t.plan(7);
 
   pull(
     alice.connFirewall.attempts(),
     pull.drain((attempt) => {
       t.equals(attempt.id, carol.id, 'logged that carol attempted');
       t.true(typeof attempt.ts, "carol's attempt is timestamped");
-      t.true(attempt.ts < Date.now(), 'happened in the past');
-      t.true(Date.now() - 1000 < attempt.ts, 'happened less than 1s ago');
+      t.pass(`timestamp is ${attempt.ts}`)
+      const now = Date.now();
+      t.pass(`now is ${now}`)
+      t.true(attempt.ts < now, 'happened in the past');
+      t.true(now - 1000 < attempt.ts, 'happened less than 1s ago');
     }),
   );
 
@@ -104,15 +107,18 @@ tape('carol is unknown to alice, carol cannot connect to alice', async (t) => {
 });
 
 tape('attempts old=true', (t) => {
-  t.plan(7);
+  t.plan(9);
 
   pull(
     alice.connFirewall.attempts({old: true, live: true}),
     pull.drain((attempt) => {
       t.equals(attempt.id, carol.id, 'logged that carol attempted');
       t.true(typeof attempt.ts, "carol's attempt is timestamped");
-      t.true(attempt.ts < Date.now(), 'happened in the past');
-      t.true(Date.now() - 1000 < attempt.ts, 'happened less than 1s ago');
+      t.pass(`timestamp is ${attempt.ts}`)
+      const now = Date.now();
+      t.pass(`now is ${now}`)
+      t.true(attempt.ts < now, 'happened in the past');
+      t.true(now - 1000 < attempt.ts, 'happened less than 1s ago');
 
       setTimeout(() => {
         const p = path.join(os.tmpdir(), 'server-alice', 'conn-attempts.json');
@@ -136,7 +142,7 @@ tape('temporary teardown', async (t) => {
 });
 
 tape('alice can read old attempts when booting up again', (t) => {
-  t.plan(3);
+  t.plan(5);
 
   alice = createSsbServer({
     path: path.join(os.tmpdir(), 'server-alice'),
@@ -159,7 +165,10 @@ tape('alice can read old attempts when booting up again', (t) => {
     pull.drain((attempt) => {
       t.equals(attempt.id, carol.id, 'logged that carol attempted');
       t.true(typeof attempt.ts, "carol's attempt is timestamped");
-      t.true(attempt.ts < Date.now(), 'happened in the past');
+      t.pass(`timestamp is ${attempt.ts}`)
+      const now = Date.now();
+      t.pass(`now is ${now}`)
+      t.true(attempt.ts < now, 'happened in the past');
     }),
   );
 });
