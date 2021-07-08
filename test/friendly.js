@@ -6,6 +6,7 @@ const path = require('path');
 const os = require('os');
 const rimraf = require('rimraf');
 const ssbKeys = require('ssb-keys');
+const sleep = require('util').promisify(setTimeout);
 
 const createSsbServer = SecretStack({
   caps: {shs: crypto.randomBytes(32).toString('base64')},
@@ -60,8 +61,10 @@ tape('bob follows alice, and alice can connect to bob', async (t) => {
   });
   t.error(err, 'published contact msg');
 
+  await sleep(2000);
+
   const [err2, rpc] = await run(alice.connect)(bob.getAddress());
-  t.error(err2);
+  t.error(err2, 'no error to connect');
   t.ok(rpc, 'alice connected to bob');
 
   await Promise.all([run(alice.close)(true), run(bob.close)(true)]);
