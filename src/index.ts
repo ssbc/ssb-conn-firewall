@@ -29,10 +29,8 @@ const MAX_ATTEMPTS = 20;
 class ConnFirewall {
   private readonly ssb: SSBWithFriends;
   private readonly config: FirewallConfig;
-  private attemptsMap: Map<FeedId, number> | null;
-  private attemptsMapLoaded: Promise<
-    NonNullable<typeof ConnFirewall.prototype.attemptsMap>
-  >;
+  private readonly attemptsMap: Map<FeedId, number>;
+  private readonly attemptsMapLoaded: Promise<void>;
   private readonly attemptsFilepath: string;
   private readonly notifyAttempts: any;
 
@@ -42,7 +40,7 @@ class ConnFirewall {
     }
     this.ssb = ssb as SSBWithFriends;
     this.config = ConnFirewall.applyDefaults(cfg);
-    this.attemptsMap = null;
+    this.attemptsMap = new Map();
     this.attemptsFilepath = path.join(cfg.path, ATTEMPTS_FILENAME);
     this.attemptsMapLoaded = this.loadOldAttempts();
     this.notifyAttempts = Notify();
@@ -59,7 +57,7 @@ class ConnFirewall {
   }
 
   static pruneAttemptsEntries(
-    map: NonNullable<typeof ConnFirewall.prototype.attemptsMap>,
+    map: typeof ConnFirewall.prototype.attemptsMap,
   ): Array<[FeedId, number]> {
     return [...map.entries()] // convert map to entries
       .sort((a, b) => b[1] - a[1]) // sort by descending timestamp order
@@ -67,7 +65,7 @@ class ConnFirewall {
   }
 
   static prepareAttemptsData(
-    map: NonNullable<typeof ConnFirewall.prototype.attemptsMap>,
+    map: typeof ConnFirewall.prototype.attemptsMap,
   ): Array<Attempt> {
     return ConnFirewall.pruneAttemptsEntries(map).map(([id, ts]) => ({id, ts}));
   }
@@ -75,25 +73,27 @@ class ConnFirewall {
   async loadOldAttempts() {
     const filename = this.attemptsFilepath;
     if (!fs.existsSync(filename)) {
-      return (this.attemptsMap = new Map());
+      return;
     }
     const [err, data] = await run(atomic.readFile)(filename, 'utf8');
     if (err) {
       console.error('failed to load ssb-conn-firewall attempts file: ' + err);
-      return (this.attemptsMap = new Map());
+      return;
     }
-    let entries = [];
+    let entries = [] as Array<[FeedId, number]>;
     try {
       entries = JSON.parse(data.toString());
     } catch (err) {
       console.error('failed to parse ssb-conn-firewall attempts file: ' + err);
-      return (this.attemptsMap = new Map());
+      return;
     }
-    return (this.attemptsMap = new Map(entries));
+    // Success:
+    for (const [id, ts] of entries) {
+      this.attemptsMap.set(id, ts);
+    }
   }
 
   async saveOldAttempts() {
-    if (!this.attemptsMap) return;
     const filename = this.attemptsFilepath;
     const prunedAttempts = ConnFirewall.pruneAttemptsEntries(this.attemptsMap);
     const json = JSON.stringify(prunedAttempts);
@@ -135,7 +135,7 @@ class ConnFirewall {
               source === ssb.id &&
               (value >= 0 || value === -1)
             ) {
-              this.attemptsMap?.delete(dest);
+              this.attemptsMap.delete(dest);
               this.saveOldAttempts();
             }
           }
@@ -148,8 +148,8 @@ class ConnFirewall {
       const source = ssb.id;
       const [dest, cb] = args;
 
+      // Blocked peers cannot connect to us
       if (config.rejectBlocked) {
-        // Blocked peers also cannot connect to us
         const [, blocked] = await run(ssb.friends.isBlocking)({source, dest});
         if (blocked) {
           debug('prevented blocked peer %s from connecting to us', dest);
@@ -158,14 +158,14 @@ class ConnFirewall {
         }
       }
 
+      // Peers beyond our hops range cannot connect, but we'll log the attempt
       if (config.rejectUnknown) {
-        // Peers beyond our hops range cannot connect, but we'll log the attempt
         const [, hops] = await run(ssb.friends.hops)({});
         if (hops && (hops[dest] == null || hops[dest] < -1)) {
           debug('prevented unknown peer %s from connecting to us', dest);
           cb(new Error('client is a stranger'));
           const ts = Date.now();
-          firewall.attemptsMap?.set(dest, ts);
+          firewall.attemptsMap.set(dest, ts);
           notifyAttempts({id: dest, ts} as Attempt);
           firewall.saveOldAttempts();
           return;
@@ -192,7 +192,7 @@ class ConnFirewall {
   private oldAttempts() {
     return pull(
       pullPromise.source(this.attemptsMapLoaded),
-      pull.map(() => ConnFirewall.prepareAttemptsData(this.attemptsMap!)),
+      pull.map(() => ConnFirewall.prepareAttemptsData(this.attemptsMap)),
       pull.flatten(),
     );
   }
