@@ -53,7 +53,7 @@ Some parameters can be configured by the user or by application code through the
        * ssb-friends).
        *
        * An exception to this rule is when we have recently tried to connect to
-       * a stranger, then we allow them to connect to us.
+       * a stranger, then we allow that stranger to connect to us.
        *
        * Default is `false`.
        */
