@@ -18,12 +18,15 @@ type RequiredDeep<T> = {
   [P in keyof T]-?: RequiredDeep<T[P]>;
 };
 
-export type FirewallConfig = RequiredDeep<SSBConfig>['conn']['firewall']
+export type FirewallConfig = RequiredDeep<SSBConfig>['conn']['firewall'];
 
 export interface SSB {
   id: FeedId;
   keys: any;
   auth: CallableFunction & {
+    hook: CallableFunction;
+  };
+  connect: CallableFunction & {
     hook: CallableFunction;
   };
   friends?: {
@@ -46,7 +49,7 @@ export interface RPC {
 export interface GraphEvent {
   [source: string]: {
     [dest: string]: number;
-  }
+  };
 }
 
 export interface AttemptsOpts {

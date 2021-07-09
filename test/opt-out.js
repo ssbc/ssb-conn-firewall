@@ -77,7 +77,7 @@ tape('alice blocks bob, but allows bob to connect', async (t) => {
   });
   t.error(err, 'published contact msg');
 
-  await sleep(2000);
+  await sleep(1000);
 
   const [err2, rpc] = await run(bob.connect)(alice.getAddress());
   t.error(err2, 'no error to connect');

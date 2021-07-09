@@ -12,15 +12,15 @@ const createSsbServer = SecretStack({
   caps: {shs: crypto.randomBytes(32).toString('base64')},
 })
   .use(require('ssb-db2'))
-  .use(require('ssb-db2/compat/ebt'))
   .use(require('ssb-friends'))
   .use(require('../lib'));
 
 const CONNECTION_TIMEOUT = 500; // ms
 
-tape('bob follows alice, and alice can connect to bob', async (t) => {
+tape('alice cannot connect to bob, but allows bob to connect', async (t) => {
   rimraf.sync(path.join(os.tmpdir(), 'server-alice'));
   rimraf.sync(path.join(os.tmpdir(), 'server-bob'));
+  rimraf.sync(path.join(os.tmpdir(), 'server-carol'));
 
   const alice = createSsbServer({
     path: path.join(os.tmpdir(), 'server-alice'),
@@ -53,19 +53,14 @@ tape('bob follows alice, and alice can connect to bob', async (t) => {
       },
     },
   });
-
-  const [err] = await run(bob.db.publish)({
-    type: 'contact',
-    contact: alice.id,
-    following: true,
-  });
-  t.error(err, 'published contact msg');
+  const [err] = await run(alice.connect)(bob.getAddress());
+  t.match(err.message, /server hung up/, 'alice cannot connect');
 
   await sleep(1000);
 
-  const [err2, rpc] = await run(alice.connect)(bob.getAddress());
-  t.error(err2, 'no error to connect');
-  t.ok(rpc, 'alice connected to bob');
+  const [err2, rpc] = await run(bob.connect)(alice.getAddress());
+  t.error(err2, 'no error');
+  t.ok(rpc, 'bob connected to alice');
 
   await Promise.all([run(alice.close)(true), run(bob.close)(true)]);
   t.end();

@@ -52,6 +52,9 @@ Some parameters can be configured by the user or by application code through the
        * unknown to us, i.e. not within our configured hops range (according to
        * ssb-friends).
        *
+       * An exception to this rule is when we have recently tried to connect to
+       * a stranger, then we allow them to connect to us.
+       *
        * Default is `false`.
        */
       rejectUnknown: boolean

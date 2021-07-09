@@ -17,22 +17,27 @@ const atomic = require('atomic-file-rw') as Pick<
   'readFile' | 'writeFile'
 >;
 const Notify = require('pull-notify');
+const Ref = require('ssb-ref');
 const pull = require('pull-stream');
 const pullPromise = require('pull-promise');
 const cat = require('pull-cat');
 const debug = require('debug')('ssb:conn-firewall');
 
-const ATTEMPTS_FILENAME = 'conn-attempts.json';
-const MAX_ATTEMPTS = 20;
+const INCOMING_ATTEMPTS_FILENAME = 'conn-attempts.json';
+const MAX_INCOMING_ATTEMPTS = 20;
+const OUTGOING_FORGET_POLL = 1 * 60e3; // 1 minute
+const OUTGOING_FORGET_THRESHOLD = 5 * 60e3; // 5 minutes
 
 @plugin('0.1.0')
 class ConnFirewall {
   private readonly ssb: SSBWithFriends;
   private readonly config: FirewallConfig;
-  private readonly attemptsMap: Map<FeedId, number>;
-  private readonly attemptsMapLoaded: Promise<void>;
-  private readonly attemptsFilepath: string;
-  private readonly notifyAttempts: any;
+  private readonly incomingAttemptsMap: Map<FeedId, number>;
+  private readonly incomingAttemptsMapLoaded: Promise<void>;
+  private readonly incomingAttemptsFilepath: string;
+  private readonly outgoingAttemptsMap: Map<FeedId, number>;
+  private timerForgetOutgoing: NodeJS.Timeout | null;
+  private readonly notifyIncomingAttempts: any;
 
   constructor(ssb: SSB, cfg: SSBConfig) {
     if (!ssb?.friends?.graphStream) {
@@ -40,10 +45,15 @@ class ConnFirewall {
     }
     this.ssb = ssb as SSBWithFriends;
     this.config = ConnFirewall.applyDefaults(cfg);
-    this.attemptsMap = new Map();
-    this.attemptsFilepath = path.join(cfg.path, ATTEMPTS_FILENAME);
-    this.attemptsMapLoaded = this.loadOldAttempts();
-    this.notifyAttempts = Notify();
+    this.incomingAttemptsMap = new Map();
+    this.incomingAttemptsFilepath = path.join(
+      cfg.path,
+      INCOMING_ATTEMPTS_FILENAME,
+    );
+    this.incomingAttemptsMapLoaded = this.loadOldIncomingAttempts();
+    this.notifyIncomingAttempts = Notify();
+    this.outgoingAttemptsMap = new Map();
+    this.timerForgetOutgoing = null;
     this.init();
   }
 
@@ -57,21 +67,21 @@ class ConnFirewall {
   }
 
   static pruneAttemptsEntries(
-    map: typeof ConnFirewall.prototype.attemptsMap,
+    map: typeof ConnFirewall.prototype.incomingAttemptsMap,
   ): Array<[FeedId, number]> {
     return [...map.entries()] // convert map to entries
       .sort((a, b) => b[1] - a[1]) // sort by descending timestamp order
-      .slice(0, MAX_ATTEMPTS); // pick the top N
+      .slice(0, MAX_INCOMING_ATTEMPTS); // pick the top N
   }
 
   static prepareAttemptsData(
-    map: typeof ConnFirewall.prototype.attemptsMap,
+    map: typeof ConnFirewall.prototype.incomingAttemptsMap,
   ): Array<Attempt> {
     return ConnFirewall.pruneAttemptsEntries(map).map(([id, ts]) => ({id, ts}));
   }
 
-  async loadOldAttempts() {
-    const filename = this.attemptsFilepath;
+  async loadOldIncomingAttempts() {
+    const filename = this.incomingAttemptsFilepath;
     if (!fs.existsSync(filename)) {
       return;
     }
@@ -89,13 +99,15 @@ class ConnFirewall {
     }
     // Success:
     for (const [id, ts] of entries) {
-      this.attemptsMap.set(id, ts);
+      this.incomingAttemptsMap.set(id, ts);
     }
   }
 
-  async saveOldAttempts() {
-    const filename = this.attemptsFilepath;
-    const prunedAttempts = ConnFirewall.pruneAttemptsEntries(this.attemptsMap);
+  async saveOldIncomingAttempts() {
+    const filename = this.incomingAttemptsFilepath;
+    const prunedAttempts = ConnFirewall.pruneAttemptsEntries(
+      this.incomingAttemptsMap,
+    );
     const json = JSON.stringify(prunedAttempts);
     const [err] = await run(atomic.writeFile)(filename, json, 'utf8');
     if (err) {
@@ -103,9 +115,28 @@ class ConnFirewall {
     }
   }
 
+  scheduleForgetOutgoing() {
+    if (this.timerForgetOutgoing) return;
+
+    this.timerForgetOutgoing = setInterval(() => {
+      if (this.outgoingAttemptsMap.size === 0) {
+        clearInterval(this.timerForgetOutgoing!);
+        this.timerForgetOutgoing = null;
+      }
+      // Forget outgoing connectable feedIds that were attempted too long ago
+      const now = Date.now();
+      for (const [id, ts] of this.outgoingAttemptsMap) {
+        if (now - ts > OUTGOING_FORGET_THRESHOLD) {
+          this.outgoingAttemptsMap.delete(id);
+        }
+      }
+    }, OUTGOING_FORGET_POLL);
+    this.timerForgetOutgoing?.unref?.();
+  }
+
   init() {
     const firewall = this;
-    const {ssb, config, notifyAttempts} = firewall;
+    const {ssb, config, notifyIncomingAttempts} = firewall;
 
     // Whenever the social graph changes:
     pull(
@@ -135,13 +166,23 @@ class ConnFirewall {
               source === ssb.id &&
               (value >= 0 || value === -1)
             ) {
-              this.attemptsMap.delete(dest);
-              this.saveOldAttempts();
+              this.incomingAttemptsMap.delete(dest);
+              this.outgoingAttemptsMap.delete(dest);
+              this.saveOldIncomingAttempts();
             }
           }
         }
       }),
     );
+
+    // Patch ssb.connect to monitor outgoing connections
+    ssb.connect.hook(function (this: any, fn: Function, args: any[]) {
+      const [msaddr, _cb] = args;
+      const feedId = Ref.getKeyFromAddress(msaddr);
+      firewall.outgoingAttemptsMap.set(feedId, Date.now()); // remember them
+      firewall.scheduleForgetOutgoing(); // schedule to forget them later
+      fn.apply(this, args);
+    });
 
     // Patch ssb.auth to guard incoming connections
     ssb.auth.hook(async function (this: any, fn: Function, args: any[]) {
@@ -160,14 +201,19 @@ class ConnFirewall {
 
       // Peers beyond our hops range cannot connect, but we'll log the attempt
       if (config.rejectUnknown) {
+        // Unless we recently wanted to connect to them
+        if (firewall.outgoingAttemptsMap.has(dest)) {
+          fn.apply(this, args);
+          return;
+        }
         const [, hops] = await run(ssb.friends.hops)({});
         if (hops && (hops[dest] == null || hops[dest] < -1)) {
           debug('prevented unknown peer %s from connecting to us', dest);
           cb(new Error('client is a stranger'));
           const ts = Date.now();
-          firewall.attemptsMap.set(dest, ts);
-          notifyAttempts({id: dest, ts} as Attempt);
-          firewall.saveOldAttempts();
+          firewall.incomingAttemptsMap.set(dest, ts);
+          notifyIncomingAttempts({id: dest, ts} as Attempt);
+          firewall.saveOldIncomingAttempts();
           return;
         }
       }
@@ -189,16 +235,18 @@ class ConnFirewall {
     debug('configured to reject ' + names.join(' and '));
   }
 
-  private oldAttempts() {
+  private oldIncomingAttempts() {
     return pull(
-      pullPromise.source(this.attemptsMapLoaded),
-      pull.map(() => ConnFirewall.prepareAttemptsData(this.attemptsMap)),
+      pullPromise.source(this.incomingAttemptsMapLoaded),
+      pull.map(() =>
+        ConnFirewall.prepareAttemptsData(this.incomingAttemptsMap),
+      ),
       pull.flatten(),
     );
   }
 
-  private liveAttempts() {
-    return this.notifyAttempts.listen();
+  private liveIncomingAttempts() {
+    return this.notifyIncomingAttempts.listen();
   }
 
   @muxrpc('source')
@@ -207,9 +255,11 @@ class ConnFirewall {
     const live = opts?.live ?? true;
 
     if (!old && !live) return pull.empty();
-    if (old && !live) return this.oldAttempts();
-    if (!old && live) return this.liveAttempts();
-    if (old && live) return cat([this.oldAttempts(), this.liveAttempts()]);
+    if (old && !live) return this.oldIncomingAttempts();
+    if (!old && live) return this.liveIncomingAttempts();
+    if (old && live) {
+      return cat([this.oldIncomingAttempts(), this.liveIncomingAttempts()]);
+    }
   };
 
   @muxrpc('sync')

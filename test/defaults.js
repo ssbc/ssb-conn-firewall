@@ -64,7 +64,7 @@ tape('alice blocks bob, and bob cannot connect to alice', async (t) => {
   });
   t.error(err, 'published contact msg');
 
-  await sleep(2000);
+  await sleep(1000);
 
   const [err2] = await run(bob.connect)(alice.getAddress());
   t.match(err2.message, /server hung up/, 'bob cannot connect');
@@ -78,7 +78,7 @@ tape('alice reconfigures to allow blocked (and thus bob)', async (t) => {
   });
   t.error(err, 'alice reconfigured her firewall');
 
-  await sleep(2000);
+  await sleep(1000);
 
   const [err2, rpc] = await run(bob.connect)(alice.getAddress());
   t.error(err2, 'no error to connect');
