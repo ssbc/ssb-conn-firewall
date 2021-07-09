@@ -86,24 +86,26 @@ tape('alice blocks bob, but allows bob to connect', async (t) => {
   t.end();
 });
 
-tape('carol is unknown to alice, carol cannot connect to alice', async (t) => {
+tape('carol is unknown to alice, carol cannot connect to alice', (t) => {
   t.plan(7);
 
   pull(
     alice.connFirewall.attempts(),
-    pull.drain((attempt) => {
+    pull.drain(async (attempt) => {
+      await sleep(100);
       t.equals(attempt.id, carol.id, 'logged that carol attempted');
       t.true(typeof attempt.ts, "carol's attempt is timestamped");
-      t.pass(`timestamp is ${attempt.ts}`)
+      t.pass(`timestamp is ${attempt.ts}`);
       const now = Date.now();
-      t.pass(`now is ${now}`)
+      t.pass(`now is ${now}`);
       t.true(attempt.ts < now, 'happened in the past');
       t.true(now - 1000 < attempt.ts, 'happened less than 1s ago');
     }),
   );
 
-  const [err2] = await run(carol.connect)(alice.getAddress());
-  t.match(err2.message, /server hung up/, 'carol cannot connect');
+  carol.connect(alice.getAddress(), (err2) => {
+    t.match(err2.message, /server hung up/, 'carol cannot connect');
+  });
 });
 
 tape('attempts old=true', (t) => {
@@ -111,12 +113,13 @@ tape('attempts old=true', (t) => {
 
   pull(
     alice.connFirewall.attempts({old: true, live: true}),
-    pull.drain((attempt) => {
+    pull.drain(async (attempt) => {
+      await sleep(100);
       t.equals(attempt.id, carol.id, 'logged that carol attempted');
       t.true(typeof attempt.ts, "carol's attempt is timestamped");
-      t.pass(`timestamp is ${attempt.ts}`)
+      t.pass(`timestamp is ${attempt.ts}`);
       const now = Date.now();
-      t.pass(`now is ${now}`)
+      t.pass(`now is ${now}`);
       t.true(attempt.ts < now, 'happened in the past');
       t.true(now - 1000 < attempt.ts, 'happened less than 1s ago');
 
@@ -162,12 +165,13 @@ tape('alice can read old attempts when booting up again', (t) => {
 
   pull(
     alice.connFirewall.attempts({old: true, live: false}),
-    pull.drain((attempt) => {
+    pull.drain(async (attempt) => {
+      await sleep(100);
       t.equals(attempt.id, carol.id, 'logged that carol attempted');
       t.true(typeof attempt.ts, "carol's attempt is timestamped");
-      t.pass(`timestamp is ${attempt.ts}`)
+      t.pass(`timestamp is ${attempt.ts}`);
       const now = Date.now();
-      t.pass(`now is ${now}`)
+      t.pass(`now is ${now}`);
       t.true(attempt.ts < now, 'happened in the past');
     }),
   );
