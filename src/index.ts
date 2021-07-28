@@ -80,7 +80,7 @@ class ConnFirewall {
     return ConnFirewall.pruneAttemptsEntries(map).map(([id, ts]) => ({id, ts}));
   }
 
-  async loadOldIncomingAttempts() {
+  private async loadOldIncomingAttempts() {
     const filename = this.incomingAttemptsFilepath;
     if (!fs.existsSync(filename)) {
       return;
@@ -103,7 +103,7 @@ class ConnFirewall {
     }
   }
 
-  async saveOldIncomingAttempts() {
+  private async saveOldIncomingAttempts() {
     const filename = this.incomingAttemptsFilepath;
     const prunedAttempts = ConnFirewall.pruneAttemptsEntries(
       this.incomingAttemptsMap,
@@ -115,7 +115,7 @@ class ConnFirewall {
     }
   }
 
-  scheduleForgetOutgoing() {
+  private scheduleForgetOutgoing() {
     if (this.timerForgetOutgoing) return;
 
     this.timerForgetOutgoing = setInterval(() => {
@@ -134,11 +134,8 @@ class ConnFirewall {
     this.timerForgetOutgoing?.unref?.();
   }
 
-  init() {
-    const firewall = this;
-    const {ssb, config, notifyIncomingAttempts} = firewall;
-
-    // Whenever the social graph changes:
+  private monitorSocialGraphChanges() {
+    const {ssb, config} = this;
     pull(
       ssb.friends.graphStream({live: true, old: false}),
       pull.drain((graph: GraphEvent) => {
@@ -174,8 +171,12 @@ class ConnFirewall {
         }
       }),
     );
+  }
 
-    // Patch ssb.connect to monitor outgoing connections
+  private monitorOutgoingConnections() {
+    const firewall = this;
+    const {ssb} = firewall;
+
     ssb.connect.hook(function (this: any, fn: Function, args: any[]) {
       const [msaddr, _cb] = args;
       const feedId = Ref.getKeyFromAddress(msaddr);
@@ -183,6 +184,11 @@ class ConnFirewall {
       firewall.scheduleForgetOutgoing(); // schedule to forget them later
       fn.apply(this, args);
     });
+  }
+
+  private monitorIncomingConnections() {
+    const firewall = this;
+    const {ssb, config} = firewall;
 
     // Patch ssb.auth to guard incoming connections
     ssb.auth.hook(async function (this: any, fn: Function, args: any[]) {
@@ -212,7 +218,7 @@ class ConnFirewall {
           cb(new Error('client is a stranger'));
           const ts = Date.now();
           firewall.incomingAttemptsMap.set(dest, ts);
-          notifyIncomingAttempts({id: dest, ts} as Attempt);
+          firewall.notifyIncomingAttempts({id: dest, ts} as Attempt);
           firewall.saveOldIncomingAttempts();
           return;
         }
@@ -221,7 +227,12 @@ class ConnFirewall {
       // Happy case: allow connection
       fn.apply(this, args);
     });
+  }
 
+  private init() {
+    this.monitorSocialGraphChanges();
+    this.monitorOutgoingConnections();
+    this.monitorIncomingConnections();
     this.debugInit();
   }
 
