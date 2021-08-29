@@ -25,6 +25,7 @@ const debug = require('debug')('ssb:conn-firewall');
 
 const INCOMING_ATTEMPTS_FILENAME = 'conn-attempts.json';
 const MAX_INCOMING_ATTEMPTS = 20;
+const INCOMING_ATTEMPT_RECENTLY = 5 * 60e3; // 5 minutes
 const OUTGOING_FORGET_POLL = 1 * 60e3; // 1 minute
 const OUTGOING_FORGET_THRESHOLD = 5 * 60e3; // 5 minutes
 
@@ -217,8 +218,11 @@ class ConnFirewall {
           debug('prevented unknown peer %s from connecting to us', dest);
           cb(new Error('client is a stranger'));
           const ts = Date.now();
+          const previousTS = firewall.incomingAttemptsMap.get(dest) ?? 0;
           firewall.incomingAttemptsMap.set(dest, ts);
-          firewall.notifyIncomingAttempts({id: dest, ts} as Attempt);
+          if (previousTS + INCOMING_ATTEMPT_RECENTLY < ts) {
+            firewall.notifyIncomingAttempts({id: dest, ts} as Attempt);
+          }
           firewall.saveOldIncomingAttempts();
           return;
         }
