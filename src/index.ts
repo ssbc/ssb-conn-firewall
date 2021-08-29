@@ -25,7 +25,7 @@ const debug = require('debug')('ssb:conn-firewall');
 
 const INCOMING_ATTEMPTS_FILENAME = 'conn-attempts.json';
 const MAX_INCOMING_ATTEMPTS = 20;
-const INCOMING_ATTEMPT_RECENTLY = 5 * 60e3; // 5 minutes
+const INCOMING_ATTEMPT_RECENTLY = 60 * 60e3; // 1 hour
 const OUTGOING_FORGET_POLL = 1 * 60e3; // 1 minute
 const OUTGOING_FORGET_THRESHOLD = 5 * 60e3; // 5 minutes
 
