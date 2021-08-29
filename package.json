@@ -1,7 +1,7 @@
 {
   "name": "ssb-conn-firewall",
   "description": "secret-stack plugin to configure which connections can occur",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "author": "Andre Staltz <contact@staltz.com> (http://staltz.com)",
   "license": "MIT",
   "homepage": "https://github.com/staltz/ssb-conn-firewall",
