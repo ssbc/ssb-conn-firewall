@@ -11,6 +11,9 @@
   },
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "files": [
+    "lib/*.js"
+  ],
   "dependencies": {
     "atomic-file-rw": "^0.2.2",
     "debug": "^4.3.1",
