@@ -15,7 +15,7 @@
     "lib/*.js"
   ],
   "dependencies": {
-    "atomic-file-rw": "^0.2.2",
+    "atomic-file-rw": "^0.3.0",
     "debug": "^4.3.1",
     "promisify-tuple": "^1.2.0",
     "pull-cat": "^1.1.11",
@@ -23,26 +23,25 @@
     "pull-promise": "^2.0.0",
     "pull-stream": "^3.6.14",
     "secret-stack-decorators": "^1.1.0",
-    "ssb-friends": "^5.0.0",
+    "ssb-friends": ">=5.0.0",
     "ssb-ref": "^2.13.0",
-    "ssb-typescript": "^2.5.0"
+    "ssb-typescript": "^2.8.0"
   },
   "devDependencies": {
     "@types/node": "12.x",
     "nyc": "^15.1.0",
     "rimraf": "^3.0.2",
-    "secret-stack": "^6.4.0",
+    "secret-stack": "^6.4.1",
     "ssb-caps": "^1.1.0",
-    "ssb-db2": "^2.1.3",
+    "ssb-db2": "^4.2.0",
     "ssb-keys": "^8.1.0",
-    "tap-bail": "^1.0.0",
-    "tap-spec": "^5.0.0",
-    "tape": "^5.2.2",
-    "typescript": "~4.3.4"
+    "tap-arc": "^0.3.5",
+    "tape": "^5.5.3",
+    "typescript": "4.7.x"
   },
   "scripts": {
     "typescript": "tsc",
-    "tape": "tape test/*.js | tap-bail | tap-spec",
+    "tape": "tape test/*.js | tap-arc --bail",
     "test": "npm run typescript && npm run tape",
     "coverage": "nyc --reporter=lcov npm test"
   }
